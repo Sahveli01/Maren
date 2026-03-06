@@ -30,15 +30,15 @@ export default function EnterPage() {
 
   const principal = useMemo(() => {
     const n = parseFloat(principalStr);
-    return isNaN(n) ? 0n : BigInt(Math.floor(n * 1_000_000)); // 6 decimal USDC
+    return isNaN(n) ? 0n : BigInt(Math.floor(n * 10_000_000)); // 7 decimal USDC
   }, [principalStr]);
 
   const leverage       = leverageBps / 10_000;
-  const principalUsdc  = Number(principal) / 1_000_000; // 6 decimal
+  const principalUsdc  = Number(principal) / 10_000_000; // 7 decimal
   const isValidPrincipal = principalUsdc >= 100;
 
   const totalCollateral = useMemo(
-    () => (Number(principal) / 1_000_000) * leverage,
+    () => (Number(principal) / 10_000_000) * leverage,
     [principal, leverage]
   );
   const effectiveDebt = totalCollateral - principalUsdc;
@@ -64,7 +64,7 @@ export default function EnterPage() {
   const handleEnter = async () => {
     if (!isValidPrincipal || !vaultAddress) return;
     const minCollateral = BigInt(
-      Math.floor(totalCollateral * 1_000_000 * (1 - slippageBps / 10_000)) // 6 decimal
+      Math.floor(totalCollateral * 10_000_000 * (1 - slippageBps / 10_000)) // 7 decimal
     );
     await enterPosition.mutateAsync({ principal, leverageBps, minCollateral });
   };
