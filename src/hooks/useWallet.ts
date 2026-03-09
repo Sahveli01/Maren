@@ -15,11 +15,11 @@ interface WalletStore {
 
 export const useWalletStore = create<WalletStore>()(
   persist(
-    (set) => ({
+    (set: (partial: Partial<WalletStore>) => void): WalletStore => ({
       address: null,
       vaultAddress: null,
-      setAddress: (address) => set({ address }),
-      setVaultAddress: (vaultAddress) => set({ vaultAddress }),
+      setAddress: (address: string | null) => set({ address }),
+      setVaultAddress: (vaultAddress: string | null) => set({ vaultAddress }),
       clear: () => set({ address: null, vaultAddress: null }),
     }),
     { name: "loopvault-wallet" }

@@ -89,12 +89,12 @@ export function useDeployVault() {
       setVaultAddress(vaultAddr);
       return vaultAddr;
     },
-    onSuccess: (addr) => {
+    onSuccess: (addr: string) => {
       toast.success(`Vault oluşturuldu: ${addr.slice(0, 8)}...`);
       qc.invalidateQueries({ queryKey: ["vaultAddress", address] });
     },
-    onError: (e) => {
-      toast.error(`Vault oluşturulamadı: ${e instanceof Error ? e.message : "Bilinmeyen hata"}`);
+    onError: (e: Error) => {
+      toast.error(`Vault oluşturulamadı: ${e.message ?? "Bilinmeyen hata"}`);
     },
   });
 }
@@ -136,12 +136,12 @@ export function useUpgradeVault() {
       const signed = await signTransaction(xdr);
       return submitSignedTx(signed, (s) => toast.info(s));
     },
-    onSuccess: ({ hash }) => {
+    onSuccess: ({ hash }: { hash: string }) => {
       toast.success(`Vault güncellendi! TX: ${hash.slice(0, 8)}...`);
       qc.invalidateQueries({ queryKey: ["vaultVersion", vaultAddress] });
     },
-    onError: (e) => {
-      toast.error(`Vault güncellenemedi: ${e instanceof Error ? e.message : "Bilinmeyen hata"}`);
+    onError: (e: Error) => {
+      toast.error(`Vault güncellenemedi: ${e.message ?? "Bilinmeyen hata"}`);
     },
   });
 }
@@ -172,13 +172,13 @@ export function useEnterPosition() {
       const signed = await signTransaction(xdr);
       return submitSignedTx(signed, (s) => toast.info(s));
     },
-    onSuccess: ({ hash }) => {
+    onSuccess: ({ hash }: { hash: string }) => {
       toast.success(`Pozisyon açıldı! TX: ${hash.slice(0, 8)}...`);
       qc.invalidateQueries({ queryKey: ["position"] });
       qc.invalidateQueries({ queryKey: ["healthFactor"] });
     },
-    onError: (e) => {
-      toast.error(`Pozisyon açılamadı: ${e instanceof Error ? e.message : "Bilinmeyen hata"}`);
+    onError: (e: Error) => {
+      toast.error(`Pozisyon açılamadı: ${e.message ?? "Bilinmeyen hata"}`);
     },
   });
 }
@@ -201,13 +201,13 @@ export function useExitPosition() {
       const signed = await signTransaction(xdr);
       return submitSignedTx(signed, (s) => toast.info(s));
     },
-    onSuccess: ({ hash }) => {
+    onSuccess: ({ hash }: { hash: string }) => {
       toast.success(`Pozisyon kapatıldı! TX: ${hash.slice(0, 8)}...`);
       qc.invalidateQueries({ queryKey: ["position"] });
       qc.invalidateQueries({ queryKey: ["healthFactor"] });
     },
-    onError: (e) => {
-      toast.error(`Pozisyon kapatılamadı: ${e instanceof Error ? e.message : "Bilinmeyen hata"}`);
+    onError: (e: Error) => {
+      toast.error(`Pozisyon kapatılamadı: ${e.message ?? "Bilinmeyen hata"}`);
     },
   });
 }

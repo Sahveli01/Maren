@@ -21,12 +21,12 @@ function useFaucetInfo() {
     queryFn: async () => {
       const account = await horizon.loadAccount(address!);
       const usdcEntry = account.balances.find(
-        (b): b is StellarSdk.Horizon.HorizonApi.BalanceLine<"credit_alphanum4"> =>
+        (b: StellarSdk.Horizon.HorizonApi.BalanceLine): b is StellarSdk.Horizon.HorizonApi.BalanceLine<"credit_alphanum4"> =>
           b.asset_type === "credit_alphanum4" &&
           (b as StellarSdk.Horizon.HorizonApi.BalanceLine<"credit_alphanum4">).asset_code === "USDC" &&
           (b as StellarSdk.Horizon.HorizonApi.BalanceLine<"credit_alphanum4">).asset_issuer === BLEND_USDC_ISSUER
       );
-      const xlmEntry = account.balances.find((b) => b.asset_type === "native");
+      const xlmEntry = account.balances.find((b: StellarSdk.Horizon.HorizonApi.BalanceLine) => b.asset_type === "native");
       return {
         hasTrustline: !!usdcEntry,
         usdcBalance: usdcEntry?.balance ?? "0",
@@ -57,7 +57,7 @@ function useAddTrustline() {
     mutationFn: async () => {
       if (!address) throw new Error("Wallet not connected");
       const account = await horizon.loadAccount(address);
-      const xlmEntry = account.balances.find((b) => b.asset_type === "native");
+      const xlmEntry = account.balances.find((b: StellarSdk.Horizon.HorizonApi.BalanceLine) => b.asset_type === "native");
       const xlmBalance = xlmEntry ? parseFloat(xlmEntry.balance) : 0;
       if (xlmBalance < 1.5) throw new Error(`Insufficient XLM: need at least 1.5 XLM (current: ${xlmBalance.toFixed(2)})`);
       const tx = new StellarSdk.TransactionBuilder(account, { fee: "1000", networkPassphrase: config.networkPassphrase })
@@ -71,7 +71,7 @@ function useAddTrustline() {
       return response;
     },
     onSuccess: () => { toast.success("Trustline added!"); qc.invalidateQueries({ queryKey: ["faucetInfo", address] }); qc.invalidateQueries({ queryKey: ["sacBalance"] }); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to add trustline"),
+    onError: (e: Error) => toast.error(e.message ?? "Failed to add trustline"),
   });
 }
 
@@ -90,10 +90,10 @@ function useMintUSDC() {
       qc.invalidateQueries({ queryKey: ["faucetInfo", address] });
       qc.invalidateQueries({ queryKey: ["sacBalance"] });
     },
-    onError: (e) => {
+    onError: (e: Error) => {
       setStatusText("");
       if (e instanceof MintAuthError) return;
-      toast.error(e instanceof Error ? e.message : "Mint failed");
+      toast.error(e.message ?? "Mint failed");
     },
   });
   return { ...mutation, statusText };
