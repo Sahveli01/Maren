@@ -14,8 +14,8 @@ interface WalletStore {
 }
 
 export const useWalletStore = create<WalletStore>()(
-  persist(
-    (set: (partial: Partial<WalletStore>) => void): WalletStore => ({
+  persist<WalletStore>(
+    (set) => ({
       address: null,
       vaultAddress: null,
       setAddress: (address: string | null) => set({ address }),

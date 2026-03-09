@@ -84,8 +84,7 @@ export async function POST(req: Request) {
     const result = await server.sendTransaction(prepared);
 
     if (result.status === "ERROR") {
-      const xdr = (result as { errorResultXdr?: string }).errorResultXdr;
-      const reason = xdr ?? JSON.stringify((result as { errorResult?: unknown }).errorResult ?? result);
+      const reason = JSON.stringify((result as unknown as Record<string, unknown>).errorResultXdr ?? result);
       return Response.json({ error: `Mint gönderilemedi: ${reason}` }, { status: 500 });
     }
 
@@ -103,16 +102,11 @@ export async function POST(req: Request) {
         break;
       }
       if (txStatus.status === "FAILED") {
-        const resultXdr = (txStatus as { resultXdr?: string }).resultXdr;
-        let reason = resultXdr ?? JSON.stringify(txStatus);
+        let reason = "unknown";
         try {
-          if (resultXdr) {
-            const txResult = StellarSdk.xdr.TransactionResult.fromXDR(resultXdr, "base64");
-            const opResults = txResult.result().results?.() ?? [];
-            const first = opResults[0];
-            if (first) reason = JSON.stringify(first.tr?.().toXDR("base64") ?? first.toXDR("base64"));
-          }
-        } catch { /* use raw xdr */ }
+          const failedTx = txStatus as StellarSdk.rpc.Api.GetFailedTransactionResponse;
+          reason = failedTx.resultXdr?.toXDR("base64") ?? JSON.stringify(txStatus);
+        } catch { reason = JSON.stringify(txStatus); }
         return Response.json(
           { error: `Mint zincirde başarısız: ${reason}` },
           { status: 500 }
