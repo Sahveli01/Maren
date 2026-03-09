@@ -1,0 +1,7 @@
+# Rust build artifacts
+target/
+
+# Scripts dependencies
+scripts/node_modules/
+
+# Blend-utils (separate repo, not included)
