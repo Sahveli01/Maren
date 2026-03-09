@@ -63,11 +63,34 @@ export async function POST(req: Request) {
     return Response.json({ error: "Mint işlemi başarısız", detail: result.errorResult }, { status: 500 });
   }
 
+  // Poll until the transaction is finalized (SUCCESS or FAILED)
+  const hash = result.hash;
+  let confirmed = false;
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const txStatus = await server.getTransaction(hash);
+    if (txStatus.status === "SUCCESS") {
+      confirmed = true;
+      break;
+    }
+    if (txStatus.status === "FAILED") {
+      return Response.json(
+        { error: "Mint işlemi zincirde başarısız oldu. Freighter'da USDC trustline kurulu mu?", detail: txStatus },
+        { status: 500 }
+      );
+    }
+    // status === "NOT_FOUND" → still pending, keep polling
+  }
+
+  if (!confirmed) {
+    return Response.json({ error: "Mint işlemi zaman aşımına uğradı", hash }, { status: 500 });
+  }
+
   claims.set(userPublicKey, Date.now());
 
   return Response.json({
     success: true,
-    hash: result.hash,
-    explorerUrl: `https://stellar.expert/explorer/testnet/tx/${result.hash}`,
+    hash,
+    explorerUrl: `https://stellar.expert/explorer/testnet/tx/${hash}`,
   });
 }
