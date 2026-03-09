@@ -35,87 +35,101 @@ export async function POST(req: Request) {
     );
   }
 
-  const server = new StellarSdk.rpc.Server(RPC_URL, { allowHttp: false });
-  const adminKeypair = StellarSdk.Keypair.fromSecret(ADMIN_SECRET);
-  const account = await server.getAccount(adminKeypair.publicKey());
+  try {
+    const server = new StellarSdk.rpc.Server(RPC_URL, { allowHttp: false });
+    const adminKeypair = StellarSdk.Keypair.fromSecret(ADMIN_SECRET);
 
-  const contract = new StellarSdk.Contract(USDC_CONTRACT);
-
-  const tx = new StellarSdk.TransactionBuilder(account, {
-    fee: "100000",
-    networkPassphrase: PASSPHRASE,
-  })
-    .addOperation(
-      contract.call(
-        "mint",
-        StellarSdk.Address.fromString(userPublicKey).toScVal(),
-        StellarSdk.nativeToScVal(MINT_AMOUNT, { type: "i128" })
-      )
-    )
-    .setTimeout(30)
-    .build();
-
-  const prepared = await server.prepareTransaction(tx);
-  prepared.sign(adminKeypair);
-  const result = await server.sendTransaction(prepared);
-
-  if (result.status === "ERROR") {
-    let reason = "bilinmeyen hata";
+    let account: StellarSdk.Account;
     try {
-      const xdr = (result as any).errorResultXdr as string | undefined;
-      if (xdr) {
-        reason = xdr;
-      } else if ((result as any).errorResult) {
-        reason = JSON.stringify((result as any).errorResult);
-      }
-    } catch { /* ignore */ }
-    return Response.json({ error: `Mint gönderilemedi: ${reason}` }, { status: 500 });
-  }
-
-  // Poll until the transaction is finalized (SUCCESS or FAILED)
-  const hash = result.hash;
-  let confirmed = false;
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 2000));
-    const txStatus = await server.getTransaction(hash);
-    if (txStatus.status === "SUCCESS") {
-      confirmed = true;
-      break;
-    }
-    if (txStatus.status === "FAILED") {
-      // Decode the actual XDR error so we can surface the real failure reason
-      let reason = "bilinmeyen hata";
-      try {
-        const xdr = (txStatus as any).resultXdr as string | undefined;
-        if (xdr) {
-          const txResult = StellarSdk.xdr.TransactionResult.fromXDR(xdr, "base64");
-          const opResults = txResult.result().results?.() ?? [];
-          const first = opResults[0];
-          if (first) {
-            // e.g. "invokeHostFunctionTrapped" → useful string
-            reason = JSON.stringify(first.tr?.().toXDR("base64") ?? first.toXDR("base64"));
-          }
-        }
-      } catch {
-        reason = JSON.stringify((txStatus as any).resultXdr ?? txStatus);
-      }
+      account = await server.getAccount(adminKeypair.publicKey());
+    } catch (e: any) {
       return Response.json(
-        { error: `Mint işlemi zincirde başarısız oldu: ${reason}` },
+        { error: `Admin hesabı RPC'de bulunamadı: ${e?.message ?? e}` },
         { status: 500 }
       );
     }
-    // status === "NOT_FOUND" → still pending, keep polling
+
+    const contract = new StellarSdk.Contract(USDC_CONTRACT);
+
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: "100000",
+      networkPassphrase: PASSPHRASE,
+    })
+      .addOperation(
+        contract.call(
+          "mint",
+          StellarSdk.Address.fromString(userPublicKey).toScVal(),
+          StellarSdk.nativeToScVal(MINT_AMOUNT, { type: "i128" })
+        )
+      )
+      .setTimeout(30)
+      .build();
+
+    let prepared: StellarSdk.Transaction;
+    try {
+      prepared = (await server.prepareTransaction(tx)) as StellarSdk.Transaction;
+    } catch (e: any) {
+      return Response.json(
+        { error: `Transaction simülasyonu başarısız: ${e?.message ?? JSON.stringify(e)}` },
+        { status: 500 }
+      );
+    }
+
+    prepared.sign(adminKeypair);
+    const result = await server.sendTransaction(prepared);
+
+    if (result.status === "ERROR") {
+      const xdr = (result as any).errorResultXdr as string | undefined;
+      const reason = xdr ?? JSON.stringify((result as any).errorResult ?? result);
+      return Response.json({ error: `Mint gönderilemedi: ${reason}` }, { status: 500 });
+    }
+
+    // Poll for up to 8 seconds (4 × 2s) to stay within Vercel 10s timeout
+    const hash = result.hash;
+    let confirmed = false;
+    for (let i = 0; i < 4; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const txStatus = await server.getTransaction(hash);
+      if (txStatus.status === "SUCCESS") {
+        confirmed = true;
+        break;
+      }
+      if (txStatus.status === "FAILED") {
+        const resultXdr = (txStatus as any).resultXdr as string | undefined;
+        let reason = resultXdr ?? JSON.stringify(txStatus);
+        try {
+          if (resultXdr) {
+            const txResult = StellarSdk.xdr.TransactionResult.fromXDR(resultXdr, "base64");
+            const opResults = txResult.result().results?.() ?? [];
+            const first = opResults[0];
+            if (first) reason = JSON.stringify(first.tr?.().toXDR("base64") ?? first.toXDR("base64"));
+          }
+        } catch { /* use raw xdr */ }
+        return Response.json(
+          { error: `Mint zincirde başarısız: ${reason}` },
+          { status: 500 }
+        );
+      }
+      // NOT_FOUND → still pending
+    }
+
+    // Whether confirmed in window or still pending, record rate limit and return hash.
+    // Stellar transactions submitted without ERROR are nearly always finalized — client can
+    // verify via stellar.expert if needed.
+    claims.set(userPublicKey, Date.now());
+
+    return Response.json({
+      success: true,
+      hash,
+      confirmed,
+      explorerUrl: `https://stellar.expert/explorer/testnet/tx/${hash}`,
+    });
+  } catch (e: any) {
+    // Catch-all: herhangi bir unhandled exception → JSON 500 döner (HTML değil)
+    console.error("[faucet] unhandled error:", e);
+    return Response.json(
+      { error: `Sunucu hatası: ${e?.message ?? String(e)}` },
+      { status: 500 }
+    );
   }
-
-  if (!confirmed) {
-    return Response.json({ error: "Mint işlemi zaman aşımına uğradı", hash }, { status: 500 });
-  }
-
-  claims.set(userPublicKey, Date.now());
-
-  return Response.json({
-    success: true,
-    hash,
-    explorerUrl: `https://stellar.expert/explorer/testnet/tx/${hash}`,
-  });
 }
